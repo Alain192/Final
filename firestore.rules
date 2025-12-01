@@ -1,0 +1,162 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función auxiliar para verificar si el usuario está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Función para verificar el rol del usuario
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    // Función para verificar si es el mismo usuario
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Reglas para la colección de usuarios
+    match /users/{userId} {
+      // Permitir lectura si está autenticado
+      allow read: if isAuthenticated();
+      
+      // Permitir crear solo si es el mismo usuario
+      allow create: if isAuthenticated() && isOwner(userId);
+      
+      // Permitir actualizar solo si es el mismo usuario o es admin
+      allow update: if isAuthenticated() && (isOwner(userId) || getUserRole() == 'admin');
+      
+      // Solo admin puede eliminar
+      allow delete: if isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    // Reglas para abogados
+    match /lawyers/{lawyerId} {
+      // Todos los autenticados pueden leer abogados
+      allow read: if isAuthenticated();
+      
+      // Solo el abogado o admin puede crear/actualizar
+      allow create, update: if isAuthenticated() && (isOwner(lawyerId) || getUserRole() == 'admin');
+      
+      // Solo admin puede eliminar
+      allow delete: if isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    // Reglas para especialidades
+    match /specialties/{specialtyId} {
+      // Todos pueden leer especialidades
+      allow read: if isAuthenticated();
+      
+      // Solo admin puede crear, actualizar o eliminar
+      allow write: if isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    // Reglas para citas
+    match /appointments/{appointmentId} {
+      // Puede leer si es el cliente, el abogado, admin o manager
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.clientId) || 
+        isOwner(resource.data.lawyerId) || 
+        getUserRole() in ['admin', 'manager']
+      );
+      
+      // Puede crear si es el cliente
+      allow create: if isAuthenticated() && isOwner(request.resource.data.clientId);
+      
+      // Puede actualizar si es el cliente, el abogado, admin o manager
+      allow update: if isAuthenticated() && (
+        isOwner(resource.data.clientId) || 
+        isOwner(resource.data.lawyerId) || 
+        getUserRole() in ['admin', 'manager']
+      );
+      
+      // Solo admin puede eliminar
+      allow delete: if isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    // Reglas para casos
+    match /cases/{caseId} {
+      // Puede leer si es el cliente, el abogado, admin o manager
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.clientId) || 
+        isOwner(resource.data.lawyerId) || 
+        getUserRole() in ['admin', 'manager']
+      );
+      
+      // Puede crear si es el cliente o el abogado
+      allow create: if isAuthenticated() && (
+        isOwner(request.resource.data.clientId) || 
+        isOwner(request.resource.data.lawyerId)
+      );
+      
+      // Puede actualizar si es el cliente, el abogado, admin o manager
+      allow update: if isAuthenticated() && (
+        isOwner(resource.data.clientId) || 
+        isOwner(resource.data.lawyerId) || 
+        getUserRole() in ['admin', 'manager']
+      );
+      
+      // Solo admin puede eliminar
+      allow delete: if isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    // Reglas para documentos
+    match /documents/{documentId} {
+      // Puede leer si es el cliente, el abogado del caso, admin o manager
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.clientId) || 
+        isOwner(resource.data.lawyerId) || 
+        getUserRole() in ['admin', 'manager']
+      );
+      
+      // Puede crear/actualizar si es el abogado del caso
+      allow create, update: if isAuthenticated() && isOwner(request.resource.data.lawyerId);
+      
+      // Solo el abogado o admin puede eliminar
+      allow delete: if isAuthenticated() && (
+        isOwner(resource.data.lawyerId) || 
+        getUserRole() == 'admin'
+      );
+    }
+    
+    // Reglas para notas
+    match /case_notes/{noteId} {
+      // Puede leer si es el cliente (y la nota es compartida), el abogado, admin o manager
+      allow read: if isAuthenticated() && (
+        (isOwner(resource.data.clientId) && resource.data.shareWithClient == true) || 
+        isOwner(resource.data.lawyerId) || 
+        getUserRole() in ['admin', 'manager']
+      );
+      
+      // Solo el abogado puede crear/actualizar notas
+      allow create, update: if isAuthenticated() && isOwner(request.resource.data.lawyerId);
+      
+      // Solo el abogado o admin puede eliminar
+      allow delete: if isAuthenticated() && (
+        isOwner(resource.data.lawyerId) || 
+        getUserRole() == 'admin'
+      );
+    }
+    
+    // Reglas para facturas
+    match /invoices/{invoiceId} {
+      // Puede leer si es el cliente, el abogado, admin o manager
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.clientId) || 
+        isOwner(resource.data.lawyerId) || 
+        getUserRole() in ['admin', 'manager']
+      );
+      
+      // Puede crear si es el abogado o el sistema (mediante cloud function)
+      allow create: if isAuthenticated();
+      
+      // Puede actualizar si es admin o manager
+      allow update: if isAuthenticated() && getUserRole() in ['admin', 'manager'];
+      
+      // Solo admin puede eliminar
+      allow delete: if isAuthenticated() && getUserRole() == 'admin';
+    }
+  }
+}

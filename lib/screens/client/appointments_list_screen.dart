@@ -5,6 +5,8 @@ import '../../providers/appointment_provider.dart';
 import '../../providers/lawyer_provider.dart';
 import '../../models/appointment.dart';
 import '../../models/lawyer.dart';
+import '../../models/case_note.dart';
+import '../../services/firestore_service.dart';
 import 'lawyer_search_screen.dart';
 import 'lawyer_detail_screen.dart';
 
@@ -482,9 +484,207 @@ class AppointmentCard extends StatelessWidget {
                     ),
               ),
             ],
+            
+            // Botón para ver acta si la cita está completada
+            if (appointment.status == AppointmentStatus.completed) ...[
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _showAppointmentNotes(context),
+                  icon: const Icon(Icons.description),
+                  label: const Text('Ver Acta de Consulta'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).primaryColor,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  void _showAppointmentNotes(BuildContext context) async {
+    final firestoreService = FirestoreService();
+    
+    // Buscar actas relacionadas con esta cita específica
+    final allNotes = await firestoreService.getNotesByAppointment(appointment.id).first;
+    
+    // Filtrar solo las notas que están compartidas con el cliente
+    final appointmentNotes = allNotes.where((note) => note.isSharedWithClient).toList();
+
+    if (!context.mounted) return;
+
+    if (appointmentNotes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El abogado aún no ha redactado el acta de esta consulta'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.8,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Acta de Consulta',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            Text(
+                              'Dr. ${appointment.lawyerName}',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Colors.grey[600],
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: appointmentNotes.length,
+                    itemBuilder: (context, index) {
+                      final note = appointmentNotes[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        elevation: 2,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.event_note,
+                                    color: Theme.of(context).primaryColor,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      note.title,
+                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    DateFormat('dd/MM/yyyy HH:mm').format(note.createdAt),
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: Colors.grey[600],
+                                        ),
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 24),
+                              Text(
+                                'Resumen de la Consulta',
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).primaryColor,
+                                    ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                note.content,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              if (note.nextSteps?.isNotEmpty ?? false) ...[
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Próximos Pasos',
+                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).primaryColor,
+                                      ),
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.blue.shade200),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(
+                                        Icons.arrow_forward,
+                                        color: Colors.blue.shade700,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          note.nextSteps!,
+                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                color: Colors.blue.shade900,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
