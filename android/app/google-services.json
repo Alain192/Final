@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "986807726762",
+    "project_id": "app-resp",
+    "storage_bucket": "app-resp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:986807726762:android:f5884ac7dc226ca3c7d6d3",
+        "android_client_info": {
+          "package_name": "com.app_resp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1HiUIzKhjJuZcfMDPKxD7jbE-vcbzkcQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
